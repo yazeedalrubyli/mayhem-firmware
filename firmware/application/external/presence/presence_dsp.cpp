@@ -220,21 +220,22 @@ const Output& Detector::push(int32_t power_cdb) {
     if (lag_count_ < lag_len_) lag_count_++;
     motion_win_.push(clamp_deviation(static_cast<int64_t>(h - lagged) * 16));
 
-    // 4. still: RMS of (fast - slow) over the still window, Q8
-    still_win_.push(clamp_deviation(static_cast<int64_t>(fast_q8) - slow_q8));
+    // 4. still: RMS of (fast - slow) over the still window, Q4 like motion (a Q8 deviation would hit
+    //    the 46340 clamp at 1.81 dB and cap the score below any calibrated threshold above that)
+    still_win_.push(clamp_deviation((static_cast<int64_t>(fast_q8) - slow_q8) / 16));
 
     const int32_t motion_q4 = static_cast<int32_t>(motion_win_.rms());
-    const int32_t still_q8 = static_cast<int32_t>(still_win_.rms());
+    const int32_t still_q4 = static_cast<int32_t>(still_win_.rms());
     out_.power_cdb = fast_q8 >> 8;
     out_.motion_cdb = motion_q4 >> 4;
-    out_.still_cdb = still_q8 >> 8;
+    out_.still_cdb = still_q4 >> 4;
 
-    if (cal_phase_ != 0) run_calibration(motion_q4, still_q8);
-    decide(motion_q4, still_q8, slow_q8);
+    if (cal_phase_ != 0) run_calibration(motion_q4, still_q4);
+    decide(motion_q4, still_q4, slow_q8);
     return out_;
 }
 
-void Detector::run_calibration(int32_t motion_q4, int32_t still_q8) {
+void Detector::run_calibration(int32_t motion_q4, int32_t still_q4) {
     const size_t measure = cal_measure_s * cfg_.rate_hz;
     if (cal_phase_ == 1) {
         if (--cal_left_ == 0) {
@@ -248,14 +249,14 @@ void Detector::run_calibration(int32_t motion_q4, int32_t still_q8) {
     }
     if (cal_left_ <= (cal_measure_s - cal_settle_s) * cfg_.rate_hz) {
         cal_sum_m_ += motion_q4;
-        cal_sum_s_ += still_q8;
+        cal_sum_s_ += still_q4;
         cal_n_++;
     }
     if (--cal_left_ == 0) {
         const int64_t base_m_q4 = cal_n_ ? cal_sum_m_ / static_cast<int64_t>(cal_n_) : 0;
-        const int64_t base_s_q8 = cal_n_ ? cal_sum_s_ / static_cast<int64_t>(cal_n_) : 0;
+        const int64_t base_s_q4 = cal_n_ ? cal_sum_s_ / static_cast<int64_t>(cal_n_) : 0;
         set_thresholds(static_cast<int32_t>(clamp_i64((3 * base_m_q4) >> 4, 0, 30000)),
-                       static_cast<int32_t>(clamp_i64((3 * base_s_q8) >> 8, 0, 30000)));
+                       static_cast<int32_t>(clamp_i64((3 * base_s_q4) >> 4, 0, 30000)));
         cal_phase_ = 0;
         state_ = State::Empty;
         below_ = 0;
@@ -263,7 +264,7 @@ void Detector::run_calibration(int32_t motion_q4, int32_t still_q8) {
     out_.cal_remaining = static_cast<uint16_t>(cal_phase_ ? cal_left_ : 0);
 }
 
-void Detector::decide(int32_t motion_q4, int32_t still_q8, int32_t slow_q8) {
+void Detector::decide(int32_t motion_q4, int32_t still_q4, int32_t slow_q8) {
     if (cal_phase_ != 0) {
         out_.state = State::Calibrating;
         out_.confidence_pct = 0;
@@ -278,11 +279,11 @@ void Detector::decide(int32_t motion_q4, int32_t still_q8, int32_t slow_q8) {
     }
 
     const int64_t thr_m_q4 = static_cast<int64_t>(thr_motion_cdb_) * 16;
-    const int64_t thr_s_q8 = static_cast<int64_t>(thr_still_cdb_) * 256;
+    const int64_t thr_s_q4 = static_cast<int64_t>(thr_still_cdb_) * 16;
     const bool motion_on = motion_q4 >= thr_m_q4;
     const bool motion_off = static_cast<int64_t>(motion_q4) * 10 < thr_m_q4 * 7;
-    const bool still_on = still_q8 >= thr_s_q8;
-    const bool still_off = static_cast<int64_t>(still_q8) * 10 < thr_s_q8 * 7;
+    const bool still_on = still_q4 >= thr_s_q4;
+    const bool still_off = static_cast<int64_t>(still_q4) * 10 < thr_s_q4 * 7;
 
     switch (state_) {
         case State::Moving:
@@ -320,7 +321,7 @@ void Detector::decide(int32_t motion_q4, int32_t still_q8, int32_t slow_q8) {
     }
 
     const int64_t m_ratio = 50 * static_cast<int64_t>(motion_q4) / thr_m_q4;
-    const int64_t s_ratio = 50 * static_cast<int64_t>(still_q8) / thr_s_q8;
+    const int64_t s_ratio = 50 * static_cast<int64_t>(still_q4) / thr_s_q4;
     int64_t confidence = 0;
     switch (state_) {
         case State::Moving:

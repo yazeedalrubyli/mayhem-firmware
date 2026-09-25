@@ -45,8 +45,8 @@ Registration follows the existing pattern exactly:
 - `firmware/application/external/external.cmake`: add the three `.cpp` files to `EXTCPPSRC` and `presence`
   to `EXTAPPLIST`.
 - `firmware/application/external/external.ld`: one new 32k slot
-  `ram_external_app_presence (rwx) : org = 0xAE000000, len = 32k` (all 79 slots `0xADB10000..0xADFF0000` are
-  taken at v2.4.0; `external_app_info.py` allows up to `0xAE020000`, so `0xAE000000` and `0xAE010000` are free
+  `ram_external_app_presence (rwx) : org = 0xAE040000, len = 32k` (all 79 slots `0xADB10000..0xADFF0000` are
+  taken at v2.4.0; `external_app_info.py` allows up to `0xAE020000`, so `0xAE000000` and `0xAE010000` looked free, but `0xAE000000` is taken by `mdc_tx` at v2.4.0 and the app uses `0xAE040000`, the first free slot after `p25_tx`
   without touching the tool) plus the matching `SECTIONS` entry with
   `KEEP(*(.external_app.app_presence.application_information))`.
 - `application_information_t`: `app_name "Presence"`, `menu_location app_location_t::RX`,
@@ -156,7 +156,7 @@ class Detector {
 5. **Calibration** (`start_calibration`): state `Calibrating` for `5 s` (owner leaves the area) then `8 s`
    during which the motion and still scores are averaged into `base_m`, `base_s`. Then
    `thr_motion = max(3 * base_m, 20 cdB)`, `thr_still = max(3 * base_s, 5 cdB)`. Until a calibration is
-   run or restored, the defaults are `thr_motion = 150 cdB`, `thr_still = 40 cdB`.
+   run or restored, the defaults are `thr_motion = 250 cdB`, `thr_still = 150 cdB` (raised from 150/40 at bring-up: about 3× the idle levels measured on the H4M), and `min_power_cdb` defaults to −3600 (the H4M floor is −38…−39 dB from 1.1 to 5.6 GHz).
 6. **Decision** with hysteresis and hold:
    - `NoSignal` if `ema_slow < min_power_cdb` (takes priority over everything except Calibrating).
    - `Moving` entered when `motion ≥ thr_motion`; left when `motion < 0.7 * thr_motion` for 1 s.

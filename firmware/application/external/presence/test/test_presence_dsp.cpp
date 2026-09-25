@@ -277,3 +277,25 @@ TEST_CASE("the rate tracker re-derives the rate only after two consecutive windo
     CHECK(rt.offer(60, 5) == 0);
     CHECK(rt.offer(10, 5) == 0);
 }
+
+TEST_CASE("a slow drift scores a still level above a calibrated threshold and reaches Present") {
+    // Review finding 2026-09-25: the still deviation was pushed in Q8 and clamped at 46340, which capped
+    // the still score at 1.81 dB while calibration on the device set 2.27 and 3.84 dB thresholds
+    // (walk2/walk3), so Present was unreachable. A 1.4 dB/s drift at 10 Hz makes fast - slow about
+    // 3.9 dB with only 0.28 dB of lag-difference motion, so it must reach Present against 3.84 dB.
+    Detector d{Config{10, 1, -9000}};
+    d.set_thresholds(default_thr_motion_cdb, 384);
+    feed_constant(d, 100, -4000);
+    int32_t max_still = 0;
+    bool present = false;
+    bool moving = false;
+    for (int i = 1; i <= 200; i++) {
+        const auto& o = d.push(-4000 + 14 * i);
+        if (o.still_cdb > max_still) max_still = o.still_cdb;
+        if (o.state == State::Present) present = true;
+        if (o.state == State::Moving) moving = true;
+    }
+    CHECK(max_still >= 300);
+    CHECK(present);
+    CHECK_FALSE(moving);
+}

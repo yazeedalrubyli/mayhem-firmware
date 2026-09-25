@@ -151,8 +151,8 @@ class Detector {
     static constexpr size_t still_capacity = still_window_s * max_rate_hz;
     static constexpr size_t lag_capacity = max_rate_hz / 5 + 1;
 
-    void run_calibration(int32_t motion_q4, int32_t still_q8);
-    void decide(int32_t motion_q4, int32_t still_q8, int32_t slow_q8);
+    void run_calibration(int32_t motion_q4, int32_t still_q4);
+    void decide(int32_t motion_q4, int32_t still_q4, int32_t slow_q8);
 
     Config cfg_{};
     Output out_{};

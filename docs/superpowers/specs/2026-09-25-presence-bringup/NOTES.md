@@ -11,7 +11,7 @@ screenshot or log in this folder.
 |---|-----------|--------|
 | 1 | Room empty, calibrated: EMPTY for 60 s, no false MOVING | **Met** in walking tests 2 and 3 (70–130 s empty → EMPTY throughout). Not met in test 1 (uncalibrated + a reset bug, fixed). |
 | 2 | Person walks 2 m from the device: MOVING within 2 s | **Not met** with calibrated thresholds. Test 2 (2462 MHz): motion score 1.9 dB against a 5.3 dB threshold. Test 3 (100 MHz): 0.3–0.8 dB against 1.5 dB. Test 1 (uncalibrated 2.5 dB) did flag the walk, but also flagged the empty room. |
-| 3 | Person sits still 1–2 m away: PRESENT | **Not met**. Still score 0.60 dB vs 3.84 dB (test 2), 0.43–0.75 dB vs 2.27 dB (test 3). |
+| 3 | Person sits still 1–2 m away: PRESENT | **Not met**, and in tests 2 and 3 it could not have been met by construction: the build under test pushed the still deviation in Q8 through the 46340 clamp, which capped the still score at 1.81 dB, below the calibrated 3.84 / 2.27 dB thresholds (found in the final review, fixed in the follow-up commit: still is now carried in Q4 like motion, ceiling 28.96 dB). The still scores measured while sitting (0.60 dB in test 2, 0.43–0.69 dB in test 3) were under the cap and 3–6× below the thresholds, so the verdict stands on the data, but every still number in this folder came from the capped build. |
 | 4 | Dead frequency or no antenna: NO SIGNAL, never EMPTY | **Met** for dead frequencies (5560, 806, 942, 3500 MHz all show NO SIGNAL with the −36 dB gate). "Antenna disconnected" was not exercised (needs hands on the device). |
 
 The app's mechanics are all verified on the device (§4). What is missing is signal: in this room the only strong
@@ -85,6 +85,7 @@ is why the un-calibrated defaults are now 2.5/1.5 dB (about 3× idle, the same r
   reporting the level jump as MOVING (`30_before_retune.png` vs `31_floor_peak_1300.png`).
 - Serial-shell traffic while the app runs (screenshots every 5 s for 130 s, three times) never corrupted the
   display; it does stall the M0 event loop, which is what exposed the rate-adaptation reset (fixed).
+- Final review (one Opus verifier, whole branch): one Important finding, the still-score cap above, fixed with a host test written first; minors deferred (an interrupted calibration shows the old thresholds as if finished; Log:on fails silently when the CSV cannot be created; `pp_serial.py` exits 0 when the console answers `error` / `file not found.` to `appstart` / `flash`; the sync-apps retry loop aborts if the port has not re-enumerated).
 - Observation, not a code finding: the AMP field read 1 in a few 14:32–14:36 screenshots although the app
   never writes it; not reproducible from the console, most likely a physical touch. Toggling it back changed
   neither P nor the floor.
@@ -93,7 +94,7 @@ is why the un-calibrated defaults are now 2.5/1.5 dB (about 3× idle, the same r
 
 - Build: `docker run -v "$PWD:/havoc" -u "$(id -u):$(id -g)" --rm portapack-dev ninja -j16` in `build/`
   (ARM GCC 9.2.1). `export_external_apps.py` fails the build if `presence.ppma` exceeds 32,768 bytes
-  (it is 29,616 bytes; app slot `0xAE040000`, the first free one after `p25_tx`).
+  (it is 29,660 bytes after the review fix; app slot `0xAE040000`, the first free one after `p25_tx`).
 - Host tests: `firmware/application/external/presence/test/run.sh` (g++ 13, doctest; 18 cases / 94 assertions).
 - Device tool: `tools/presence/pp_serial.py` (`info`, `cmd`, `upload`, `verify`, `flash`, `wait`,
   `sync-apps`, `appstart`, `screenshot`, `button`, `touch`). Uploads are paced like hackrf.app on macOS
