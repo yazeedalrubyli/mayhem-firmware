@@ -67,7 +67,8 @@ class Console:
         buf = b""
         t0 = time.time()
         while time.time() - t0 < timeout:
-            chunk = self.s.read(65536)
+            waiting = self.s.in_waiting
+            chunk = self.s.read(waiting if waiting else 1)
             if chunk:
                 buf += chunk
                 if buf.rstrip().endswith(b"ch>"):
@@ -113,7 +114,8 @@ class Console:
                 head = b""
                 t0 = time.time()
                 while b"send " not in head and time.time() - t0 < 5:
-                    head += self.s.read(256)
+                    waiting = self.s.in_waiting
+                    head += self.s.read(waiting if waiting else 1)
                 if b"send " not in head:
                     raise SystemExit(f"fwb handshake failed after {sent} bytes: {head!r}")
                 self.write_paced(part)
