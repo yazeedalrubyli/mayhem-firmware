@@ -20,6 +20,8 @@
  */
 
 #include "usb_serial_shell_filesystem.hpp"
+
+#include <memory>
 #include "usb_serial_device_to_host.h"
 
 #include "chprintf.h"
@@ -395,7 +397,10 @@ void cmd_sd_crc32(BaseSequentialStream* chp, int argc, char* argv[]) {
     }
 
     auto path = path_from_string8((char*)full_fn_from_args(argc, argv).c_str());
-    File* crc_file = new File();
+    // Heap-allocated (the shell stack is small) and owned by a unique_ptr so
+    // every return path frees it; the old code leaked one File per call and
+    // exhausted the heap after ~38 crc32 commands.
+    auto crc_file = std::make_unique<File>();
     auto error = crc_file->open(path, true, false);
     if (report_on_error(chp, error)) return;
 
@@ -415,6 +420,4 @@ void cmd_sd_crc32(BaseSequentialStream* chp, int argc, char* argv[]) {
             return;
         }
     }
-
-    delete crc_file;
 }
