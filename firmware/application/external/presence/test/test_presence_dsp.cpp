@@ -250,3 +250,30 @@ TEST_CASE("the detector rate is re-derived only when the measured message rate i
     CHECK_FALSE(rate_needs_reconfigure(0, 10));
     CHECK_FALSE(rate_needs_reconfigure(51, 10));
 }
+
+TEST_CASE("the un-calibrated defaults sit about 3x above the idle baselines measured on the H4M") {
+    // Bring-up 2026-09-25 (docs/superpowers/specs/2026-09-25-presence-bringup/NOTES.md): idle motion RMS
+    // 40-80 cdB and idle still RMS 26-69 cdB on quiet and live bands; the old 150/40 tripped PRESENT on
+    // every live band before calibration.
+    CHECK(default_thr_motion_cdb == 250);
+    CHECK(default_thr_still_cdb == 150);
+}
+
+TEST_CASE("the rate tracker re-derives the rate only after two consecutive windows agree on a >20% change") {
+    RateTracker rt;
+    // nominal 10 Hz configured, the capture chain really delivers 5 Hz: second agreeing window wins
+    CHECK(rt.offer(5, 10) == 0);
+    CHECK(rt.offer(5, 10) == 5);
+    // now configured at 5 Hz: one burst window (queued messages after an M0 stall) must not reconfigure
+    CHECK(rt.offer(8, 5) == 0);
+    CHECK(rt.offer(5, 5) == 0);
+    CHECK(rt.offer(8, 5) == 0);
+    CHECK(rt.offer(5, 5) == 0);
+    // a real, persistent change still gets through
+    CHECK(rt.offer(10, 5) == 0);
+    CHECK(rt.offer(10, 5) == 10);
+    // out-of-range or empty windows never count and break the streak
+    CHECK(rt.offer(0, 5) == 0);
+    CHECK(rt.offer(60, 5) == 0);
+    CHECK(rt.offer(10, 5) == 0);
+}

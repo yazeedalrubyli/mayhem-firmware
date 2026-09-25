@@ -192,6 +192,9 @@ PresenceView::PresenceView(NavigationView& nav)
                   &text_numbers_});
 
     if (!settings_.loaded()) field_frequency_.set_value(default_frequency);
+    // A retune (field, keypad or console setfreq) changes the power level: restart the
+    // filters instead of reporting the jump as motion.
+    field_frequency_.updated = [this](rf::Frequency) { detector_.reset(); };
     if (bw_index_ >= field_bw_.options().size()) bw_index_ = 2;
     if (source_ > source_mean) source_ = source_peak;
     field_source_.set_selected_index(source_);
@@ -308,13 +311,16 @@ void PresenceView::on_frame_sync() {
  * re-configure it to the measured rate when it is more than 20% off, at most
  * once every 10 s. */
 void PresenceView::adapt_rate() {
+    // Never while calibrating: a reconfigure resets the detector and would discard the run.
+    if (was_calibrating_ || detector_.output().state == State::Calibrating) return;
     const uint32_t measured = (rate_x10_ + 5) / 10;
-    if (!rate_needs_reconfigure(measured, detector_.config().rate_hz)) return;
+    const uint32_t new_rate = rate_tracker_.offer(measured, detector_.config().rate_hz);
+    if (new_rate == 0) return;
     const uint32_t now = chTimeNow();
     if (now - last_rate_change_ms_ < 10000) return;
     last_rate_change_ms_ = now;
     Config cfg = detector_.config();
-    cfg.rate_hz = static_cast<uint16_t>(measured);
+    cfg.rate_hz = static_cast<uint16_t>(new_rate);
     detector_.configure(cfg);
 }
 
@@ -336,6 +342,10 @@ void PresenceView::feed(int32_t power_cdb) {
         redraw_counter_ = 0;
         refresh_display();
     }
+}
+
+void PresenceView::on_freqchg(int64_t freq) {
+    field_frequency_.set_value(freq);  // on_change tunes the receiver model and fires `updated`
 }
 
 void PresenceView::refresh_display() {

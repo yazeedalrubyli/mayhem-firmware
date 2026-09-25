@@ -54,8 +54,8 @@ struct Output {
     uint16_t cal_remaining{0};  // samples left in calibration, 0 when idle
 };
 
-constexpr int32_t default_thr_motion_cdb = 150;
-constexpr int32_t default_thr_still_cdb = 40;
+constexpr int32_t default_thr_motion_cdb = 250;
+constexpr int32_t default_thr_still_cdb = 150;
 constexpr int32_t floor_thr_motion_cdb = 20;
 constexpr int32_t floor_thr_still_cdb = 5;
 constexpr uint16_t max_rate_hz = 50;
@@ -69,6 +69,30 @@ inline bool rate_needs_reconfigure(uint32_t measured_hz, uint32_t expected_hz) {
     const uint32_t diff = measured_hz > expected_hz ? measured_hz - expected_hz : expected_hz - measured_hz;
     return diff * 5 > expected_hz;
 }
+
+/* Debounces rate_needs_reconfigure(): a single 1 s window can read high when the M0
+ * event loop stalls (console screenshot, SD write) and the queued messages arrive in
+ * a burst. Reconfiguring resets the detector and kills a running calibration, so a
+ * change is accepted only when two consecutive windows agree on the same new rate. */
+class RateTracker {
+   public:
+    // Returns the rate to reconfigure to, or 0 to leave the detector alone.
+    uint32_t offer(uint32_t measured_hz, uint32_t expected_hz) {
+        if (!rate_needs_reconfigure(measured_hz, expected_hz)) {
+            pending_ = 0;
+            return 0;
+        }
+        if (pending_ == measured_hz) {
+            pending_ = 0;
+            return measured_hz;
+        }
+        pending_ = measured_hz;
+        return 0;
+    }
+
+   private:
+    uint32_t pending_{0};
+};
 constexpr uint8_t max_hold_n = 4;
 constexpr size_t motion_window_s = 2;
 constexpr size_t still_window_s = 8;

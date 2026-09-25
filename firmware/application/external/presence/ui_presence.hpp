@@ -111,6 +111,14 @@ class PresenceView : public View {
     void on_statistics(const ChannelStatistics& statistics);
     void on_frame_sync();
     void adapt_rate();
+    void on_freqchg(int64_t freq);  // console `setfreq` (FreqChangeCommandMessage), as in the other external apps
+
+    MessageHandlerRegistration message_handler_freqchg{
+        Message::ID::FreqChangeCommand,
+        [this](Message* const p) {
+            const auto message = static_cast<const FreqChangeCommandMessage*>(p);
+            this->on_freqchg(message->freq);
+        }};
     void refresh_display();
     void open_log();
     void close_log();
@@ -122,7 +130,7 @@ class PresenceView : public View {
     // persisted
     uint32_t source_{source_peak};
     uint32_t bw_index_{2};
-    int32_t min_power_cdb_{-9000};
+    int32_t min_power_cdb_{-3600};  // H4M receiver floor is -38..-39 dB at 1.1-5.6 GHz (bring-up 2026-09-25); +3 dB
     int32_t thr_motion_cdb_{default_thr_motion_cdb};
     int32_t thr_still_cdb_{default_thr_still_cdb};
     bool log_enabled_{false};
@@ -145,6 +153,7 @@ class PresenceView : public View {
     uint32_t rate_window_start_ms_{0};
     uint32_t rate_x10_{0};
     uint32_t last_rate_change_ms_{0};
+    RateTracker rate_tracker_{};
     uint8_t redraw_counter_{0};
     bool was_calibrating_{false};
     File log_file_{};

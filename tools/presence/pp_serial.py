@@ -12,7 +12,7 @@ Usage:
   pp_serial.py sync-apps <dir-with-ppma>
   pp_serial.py appstart <callname>
   pp_serial.py screenshot <out.png>
-  pp_serial.py button <n>           (1 up 2 down 3 left 4 right 5 select 6 encoder+ 7 encoder-)
+  pp_serial.py button <n>           (1 right 2 left 3 down 4 up 5 select 6 DFU/debug overlay 7 encoder- 8 encoder+)
   pp_serial.py touch <x> <y>
 
 Requires pyserial and, for screenshot, Pillow. Fails loudly on any unexpected reply.
@@ -69,7 +69,7 @@ def crc32_bzip2(data):
     return crc ^ 0xFFFFFFFF
 
 
-def wait_for_console(timeout=300.0):
+def wait_for_console(timeout=600.0):
     """Block until a Mayhem console answers `info`; returns the version line."""
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -83,7 +83,7 @@ def wait_for_console(timeout=300.0):
                 if "Mayhem Version" in line:
                     print(f"  console up after {time.time() - t0:.0f} s: {line.strip()}")
                     return line
-        except (SystemExit, serial.SerialException, OSError):
+        except (SystemExit, ConsoleError, serial.SerialException, OSError):
             pass
         time.sleep(2)
     raise SystemExit("console did not answer within the timeout")
@@ -109,6 +109,7 @@ class Console:
 
     def _read_until_prompt(self, timeout):
         buf = b""
+        self.saw_prompt = False
         t0 = time.time()
         while time.time() - t0 < timeout:
             waiting = self.s.in_waiting
@@ -116,6 +117,7 @@ class Console:
             if chunk:
                 buf += chunk
                 if buf.rstrip().endswith(b"ch>"):
+                    self.saw_prompt = True
                     break
         return buf
 
@@ -135,6 +137,9 @@ class Console:
         self.s.reset_input_buffer()
         self.s.write((text + "\r").encode())
         out = self._clean(self._read_until_prompt(timeout))
+        if not self.saw_prompt:
+            # An empty or truncated reply is never "ok": the console did not come back.
+            raise ConsoleError(text, out or f"<no prompt within {timeout:.0f} s>")
         if expect_ok and not out.rstrip().endswith("ok"):
             raise ConsoleError(text, out)
         return out
@@ -161,7 +166,7 @@ class Console:
                     print(f"  device back after {time.time() - t0:.0f} s")
                     return
                 self.s.close()
-            except serial.SerialException:
+            except (ConsoleError, serial.SerialException):
                 pass
             time.sleep(2)
         raise SystemExit("device did not come back after reboot")
@@ -209,6 +214,7 @@ class Console:
                 sent += len(part)
                 print(f"\r  {remote}: {sent}/{len(data)}", end="", flush=True)
         finally:
+            self.cmd("ftruncate", expect_ok=True)  # drop stale bytes when overwriting a longer file
             self.cmd("fclose", expect_ok=True)
         print()
         self.verify(local, remote)
