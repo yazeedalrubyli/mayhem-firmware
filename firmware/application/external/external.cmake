@@ -340,6 +340,11 @@ set(EXTCPPSRC
 	#p25_tx
 	external/p25_tx/main.cpp
 	external/p25_tx/ui_p25_tx.cpp
+
+	#presence
+	external/presence/main.cpp
+	external/presence/ui_presence.cpp
+	external/presence/presence_dsp.cpp
 )
 
 set(EXTAPPLIST
@@ -425,6 +430,7 @@ set(EXTAPPLIST
 	time_sink
 	kiss_tnc
 	p25_tx
+	presence
 )
 
 # sdusb has type conflicts with PRALINE (HackRF Pro) - add only for non-PRALINE builds

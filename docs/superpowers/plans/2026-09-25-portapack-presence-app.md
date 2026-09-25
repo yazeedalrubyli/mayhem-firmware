@@ -15,7 +15,7 @@
 - Trunk `main` of `yazeedalrubyli/mayhem-firmware`, cut from upstream tag `v2.4.0`; every task commits to `main` and pushes (`git push origin main`). Commits authored as `Yazeed Alrubyli <yazeed.alrubyli@gmail.com>` and end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 - No edits under `firmware/baseband/`, `firmware/common/`, or any other app. Only `external.cmake`, `external.ld`, the new `external/presence/` directory, `tools/presence/`, and `docs/superpowers/`.
 - `m4_app_tag {'P','C','A','P'}`; the app uses `baseband::run_image(portapack::spi_flash::image_tag_capture)` and nothing else.
-- Linker slot `ram_external_app_presence (rwx) : org = 0xAE000000, len = 32k`.
+- Linker slot `ram_external_app_presence (rwx) : org = 0xAE040000, len = 32k` (0xAE000000 is taken by mdc_tx).
 - `presence.ppma` (app code + 14,844-byte capture image) must be ≤ 32,768 bytes; `export_external_apps.py` fails the build otherwise.
 - Everything in `namespace ui::external_app::presence` so the linker pattern `*ui*external_app*presence*` captures all code, including the detector.
 - Integer arithmetic only in `presence_dsp` (no float, no heap after construction, no firmware headers).

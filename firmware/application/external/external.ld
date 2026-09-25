@@ -102,6 +102,7 @@ MEMORY
     ram_external_app_time_sink             (rwx) : org = 0xADFD0000, len = 32k
     ram_external_app_same_tx               (rwx) : org = 0xADFE0000, len = 32k
     ram_external_app_kiss_tnc              (rwx) : org = 0xADFF0000, len = 32k
+    ram_external_app_presence              (rwx) : org = 0xAE040000, len = 32k
     ram_external_app_mdc_tx                (rwx) : org = 0xAE000000, len = 32k
     ram_external_app_epirb_tx              (rwx) : org = 0xAE010000, len = 32k
     ram_external_app_fpv_detect            (rwx) : org = 0xAE020000, len = 32k
@@ -583,6 +584,12 @@ SECTIONS
         KEEP(*(.external_app.app_kiss_tnc.application_information));
         *(*ui*external_app*kiss_tnc*);
     } > ram_external_app_kiss_tnc
+
+    .external_app_presence : ALIGN(4) SUBALIGN(4)
+    {
+        KEEP(*(.external_app.app_presence.application_information));
+        *(*ui*external_app*presence*);
+    } > ram_external_app_presence
 
     .external_app_mdc_tx : ALIGN(4) SUBALIGN(4)
     {
