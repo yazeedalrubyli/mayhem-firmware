@@ -110,6 +110,7 @@ class PresenceView : public View {
     void feed(int32_t power_cdb);
     void on_statistics(const ChannelStatistics& statistics);
     void on_frame_sync();
+    void adapt_rate();
     void refresh_display();
     void open_log();
     void close_log();
@@ -143,6 +144,7 @@ class PresenceView : public View {
     uint32_t push_count_{0};
     uint32_t rate_window_start_ms_{0};
     uint32_t rate_x10_{0};
+    uint32_t last_rate_change_ms_{0};
     uint8_t redraw_counter_{0};
     bool was_calibrating_{false};
     File log_file_{};
@@ -175,9 +177,10 @@ class PresenceView : public View {
     StatusBanner banner_{{UI_POS_X(0), UI_POS_Y(3), screen_width, 3 * UI_POS_DEFAULT_HEIGHT}};
     ScoreBar bar_motion_{{UI_POS_X(0), UI_POS_Y(6), screen_width, 2 * UI_POS_DEFAULT_HEIGHT}, "Motion", 1};
     ScoreBar bar_still_{{UI_POS_X(0), UI_POS_Y(8), screen_width, 2 * UI_POS_DEFAULT_HEIGHT}, "Still", 2};
-    TraceWidget trace_{{UI_POS_X(0), UI_POS_Y(10), screen_width, 9 * UI_POS_DEFAULT_HEIGHT}};
+    // The view is 19 rows tall (the title bar takes the 20th).
+    TraceWidget trace_{{UI_POS_X(0), UI_POS_Y(10), screen_width, 8 * UI_POS_DEFAULT_HEIGHT}};
     Text text_numbers_{
-        {UI_POS_X(0), UI_POS_Y(19), screen_width, UI_POS_DEFAULT_HEIGHT},
+        {UI_POS_X(0), UI_POS_Y(18), screen_width, UI_POS_DEFAULT_HEIGHT},
         ""};
 
     MessageHandlerRegistration message_handler_stats_{

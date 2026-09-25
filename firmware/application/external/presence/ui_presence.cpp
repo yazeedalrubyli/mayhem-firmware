@@ -271,6 +271,7 @@ void PresenceView::apply_source() {
     push_count_ = 0;
     redraw_counter_ = 0;
     rate_window_start_ms_ = chTimeNow();
+    last_rate_change_ms_ = rate_window_start_ms_ - 10000;  // allow one adaptation after the first window
     refresh_display();
 }
 
@@ -297,7 +298,24 @@ void PresenceView::on_frame_sync() {
         rate_x10_ = push_count_ * 10000 / elapsed;
         push_count_ = 0;
         rate_window_start_ms_ = now;
+        adapt_rate();
     }
+}
+
+/* The capture baseband emits statistics every 250k decimated samples, but at
+ * high bandwidths the M4 cannot keep up and the interval stretches (4.9 Hz at
+ * 2.5 MHz instead of 10 Hz). The detector's windows are sized in samples, so
+ * re-configure it to the measured rate when it is more than 20% off, at most
+ * once every 10 s. */
+void PresenceView::adapt_rate() {
+    const uint32_t measured = (rate_x10_ + 5) / 10;
+    if (!rate_needs_reconfigure(measured, detector_.config().rate_hz)) return;
+    const uint32_t now = chTimeNow();
+    if (now - last_rate_change_ms_ < 10000) return;
+    last_rate_change_ms_ = now;
+    Config cfg = detector_.config();
+    cfg.rate_hz = static_cast<uint16_t>(measured);
+    detector_.configure(cfg);
 }
 
 void PresenceView::feed(int32_t power_cdb) {

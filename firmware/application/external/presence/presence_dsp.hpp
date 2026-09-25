@@ -59,6 +59,16 @@ constexpr int32_t default_thr_still_cdb = 40;
 constexpr int32_t floor_thr_motion_cdb = 20;
 constexpr int32_t floor_thr_still_cdb = 5;
 constexpr uint16_t max_rate_hz = 50;
+
+/* True when the measured message rate is more than 20% away from the rate the
+ * detector was configured for, and is one the detector can be configured to.
+ * The capture baseband's stats interval stretches when the M4 is overloaded
+ * (4.9 Hz at 2.5 MHz instead of 10 Hz), and every window is sized in samples. */
+inline bool rate_needs_reconfigure(uint32_t measured_hz, uint32_t expected_hz) {
+    if (measured_hz < 1 || measured_hz > max_rate_hz) return false;
+    const uint32_t diff = measured_hz > expected_hz ? measured_hz - expected_hz : expected_hz - measured_hz;
+    return diff * 5 > expected_hz;
+}
 constexpr uint8_t max_hold_n = 4;
 constexpr size_t motion_window_s = 2;
 constexpr size_t still_window_s = 8;
@@ -103,7 +113,7 @@ class Detector {
     Detector& operator=(const Detector&) = delete;
 
     void configure(const Config& config);  // re-derives windows, then reset()
-    void reset();                          // clears signal state, keeps thresholds
+    void reset();                          // clears signal state, keeps thresholds; first 1 s is a warm-up
     void start_calibration();
     void set_thresholds(int32_t motion_cdb, int32_t still_cdb);
     const Output& push(int32_t power_cdb);
@@ -145,6 +155,7 @@ class Detector {
 
     State state_{State::Empty};
     size_t below_{0};
+    size_t warmup_left_{0};  // samples still discarded after configure/reset (1 s)
     size_t moving_hold_{10};
     size_t present_hold_{30};
 

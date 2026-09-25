@@ -136,8 +136,10 @@ struct AppSettings {
     uint8_t tx_amp = 0;
     uint8_t tx_gain = 35;
     uint32_t channel_bandwidth = 1;
-    uint32_t rx_frequency;
-    uint32_t tx_frequency;
+    // 64-bit: the HackRF tunes up to 6 GHz, which does not fit a uint32_t
+    // (5.56 GHz used to reload as 1.265 GHz).
+    rf::Frequency rx_frequency;
+    rf::Frequency tx_frequency;
     uint32_t step = 25000;
     uint8_t modulation = 1;  // NFM
     uint8_t am_config_index = 0;

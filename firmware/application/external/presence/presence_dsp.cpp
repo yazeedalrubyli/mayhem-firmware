@@ -157,6 +157,7 @@ void Detector::reset() {
     still_win_.clear();
     state_ = State::Empty;
     below_ = 0;
+    warmup_left_ = cfg_.rate_hz;
     cal_phase_ = 0;
     cal_left_ = 0;
     cal_sum_m_ = 0;
@@ -188,6 +189,15 @@ void Detector::set_thresholds(int32_t motion_cdb, int32_t still_cdb) {
 }
 
 const Output& Detector::push(int32_t power_cdb) {
+    // 0. warm-up: the first second after (re)configuration is discarded because the
+    //    radio's first reports are not yet valid and would prime the filters wrongly
+    if (warmup_left_ > 0) {
+        warmup_left_--;
+        out_.state = State::NoSignal;
+        out_.confidence_pct = 0;
+        return out_;
+    }
+
     // 1. max-hold over the last hold_n samples
     hold_buf_[hold_pos_] = power_cdb;
     hold_pos_ = static_cast<uint8_t>((hold_pos_ + 1) % cfg_.hold_n);

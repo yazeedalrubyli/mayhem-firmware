@@ -213,3 +213,40 @@ TEST_CASE("calibration restarted mid-way still finishes with valid thresholds") 
     CHECK(d.output().thr_motion_cdb == 20);
     CHECK(d.output().thr_still_cdb == 5);
 }
+
+TEST_CASE("the first second after configure or reset is a warm-up: reported NoSignal and not scored") {
+    Detector d{Config{10, 1, -9000}};
+    // radio start-up garbage: a -3600 sample then real -1100 values
+    d.push(-3600);
+    CHECK(d.output().state == State::NoSignal);
+    bool saw_moving = false;
+    for (size_t i = 0; i < 9; i++) {
+        if (d.push(-1100).state == State::Moving) saw_moving = true;
+    }
+    CHECK(d.output().state == State::NoSignal);  // still warming up (10 samples)
+    for (size_t i = 0; i < 100; i++) {
+        if (d.push(-1100).state == State::Moving) saw_moving = true;
+    }
+    CHECK_FALSE(saw_moving);
+    CHECK(d.output().state == State::Empty);
+    CHECK(d.output().motion_cdb == 0);
+    d.reset();
+    d.push(-9000);  // a garbage sample right after reset is discarded too
+    feed_constant(d, 200, -1100);
+    CHECK(d.output().state == State::Empty);
+    CHECK(d.output().motion_cdb == 0);
+}
+
+TEST_CASE("the detector rate is re-derived only when the measured message rate is more than 20% off and within range") {
+    // Measured 4.9 Hz at 2.5 MHz against the nominal 10 Hz: the windows must follow reality.
+    CHECK(rate_needs_reconfigure(5, 10));
+    CHECK(rate_needs_reconfigure(50, 10));
+    CHECK(rate_needs_reconfigure(13, 10));
+    // Within 20%: leave the detector alone (a reconfigure resets its state).
+    CHECK_FALSE(rate_needs_reconfigure(10, 10));
+    CHECK_FALSE(rate_needs_reconfigure(9, 10));
+    CHECK_FALSE(rate_needs_reconfigure(12, 10));
+    // No samples yet, or more than the detector can hold: never.
+    CHECK_FALSE(rate_needs_reconfigure(0, 10));
+    CHECK_FALSE(rate_needs_reconfigure(51, 10));
+}
