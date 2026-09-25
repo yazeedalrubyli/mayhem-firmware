@@ -36,7 +36,8 @@ firmware/application/external/presence/
   main.cpp             application_information_t + initialize_app (same shape as external/level/main.cpp)
   ui_presence.hpp/.cpp PresenceView: radio setup, message handlers, widgets
   presence_dsp.hpp/.cpp pure C++17, integer-only, no firmware includes; the whole detector
-firmware/test/application/test_presence_dsp.cpp   doctest host tests for presence_dsp (existing harness)
+firmware/application/external/presence/test/test_presence_dsp.cpp   doctest host tests for presence_dsp
+firmware/application/external/presence/test/run.sh                 builds + runs them with the host g++
 ```
 
 Registration follows the existing pattern exactly:
@@ -143,10 +144,11 @@ class Detector {
    | | 10 Hz (PEAK) | 50 Hz (MEAN) |
    |---|---|---|
    | fast | k=2, 0.4 s | k=4, 0.32 s |
-   | mid | k=4, 1.6 s | k=6, 1.28 s |
    | slow | k=5, 3.2 s | k=7, 2.56 s |
 
-3. **Motion score** = RMS over the last 2 s of `(h − ema_mid)`: large-amplitude changes faster than ~1 Hz.
+3. **Motion score** = RMS over the last 2 s of `(h[n] − h[n − lag])` with `lag = rate/5` samples (0.2 s at
+   both rates): a rate-independent high-pass that passes walking-band swings (0.5–3 Hz) and attenuates
+   the breathing band; it has nulls at multiples of 5 Hz, above any human motion.
 4. **Still score** = RMS over the last 8 s of `(ema_fast − ema_slow)`: a band-pass around 0.1–0.5 Hz,
    the breathing / body-sway band, which walking also excites.
    Both RMS windows are ring buffers of squared deviations with int64 running sums and an integer square
@@ -162,7 +164,7 @@ class Detector {
    - else `Empty`.
    - `confidence_pct = min(100, 50 * score / thr)` for the active state's score (100 % at twice the threshold).
 
-### 4.3 Host tests (doctest, `firmware/test`)
+### 4.3 Host tests (doctest, standalone runner)
 
 Synthetic inputs are hermetic unit fixtures, allowed by the owner's rules; nothing synthetic runs on the device.
 
@@ -223,7 +225,8 @@ configure with "No SOURCES given to target"). Outputs:
 `build/firmware/portapack-mayhem-firmware.bin`, `build/firmware/application/presence.ppma`,
 `build/firmware/firmware_tar/APPS/*.ppma`.
 
-Host tests: `firmware/test` CMake project built with the host compiler (`cmake -S firmware/test -B build-test && cmake --build build-test && ctest --test-dir build-test`).
+Host tests: `firmware/application/external/presence/test/run.sh` (native g++ -std=c++17 against the repo's
+`firmware/test/include/doctest.h`; the upstream `firmware/test` CMake tree does not build at v2.4.0).
 
 Deploy over the USB serial console (`/dev/ttyACM0`, 115200), no button pressing needed:
 
