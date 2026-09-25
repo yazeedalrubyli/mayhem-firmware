@@ -7,7 +7,7 @@ Usage:
   pp_serial.py ls /APPS
   pp_serial.py upload <local-file> </SD/PATH>
   pp_serial.py verify <local-file> </SD/PATH>
-  pp_serial.py flash </FIRMWARE/x.bin>
+  pp_serial.py flash </FIRMWARE/x.bin>    (success = "Flashing started"; the device reboots, no prompt)
   pp_serial.py wait                  (block until the console answers, e.g. after flash)
   pp_serial.py sync-apps <dir-with-ppma>
   pp_serial.py appstart <callname>
@@ -97,9 +97,14 @@ class ConsoleError(RuntimeError):
 
 
 class Console:
-    def __init__(self, port=None):
-        self.port = port or find_port()
-        self.s = serial.Serial(self.port, 115200, timeout=0.2, write_timeout=5)
+    def __init__(self, port=None, transport=None):
+        # `transport` lets hermetic tests script the device's replies instead of opening a port.
+        if transport is not None:
+            self.port = "<scripted transport>"
+            self.s = transport
+        else:
+            self.port = port or find_port()
+            self.s = serial.Serial(self.port, 115200, timeout=0.2, write_timeout=5)
         self.s.reset_input_buffer()
         self.s.write(b"\r")
         self._read_until_prompt(2.0)
@@ -143,6 +148,21 @@ class Console:
         if expect_ok and not out.rstrip().endswith("ok"):
             raise ConsoleError(text, out)
         return out
+
+    def flash(self, remote, timeout=10.0):
+        """Start flashing `remote`. The device answers "Flashing started" and reboots into the
+        bootloader, so no prompt ever follows; anything else ("file not found.") is an error."""
+        text = f"flash {remote}"
+        self.s.reset_input_buffer()
+        self.s.write((text + "\r").encode())
+        out = self._clean(self._read_until_prompt(timeout))
+        if "Flashing started" not in out:
+            raise ConsoleError(text, out or f"<no reply within {timeout:.0f} s>")
+        return out
+
+    def appstart(self, name, timeout=10.0):
+        """Start an external app; the console answers `ok`, or `error` when it is not on the SD."""
+        return self.cmd(f"appstart {name}", timeout=timeout, expect_ok=True)
 
     def reboot_and_wait(self, timeout=240.0):
         """Reboot the device and block until its console answers `info` again."""
@@ -275,7 +295,7 @@ def main(argv):
         elif op == "verify":
             c.verify(argv[2], argv[3])
         elif op == "flash":
-            print(c.cmd(f"flash {argv[2]}", timeout=10.0))
+            print(c.flash(argv[2]))
         elif op == "sync-apps":
             wanted = sorted(n for n in os.listdir(argv[2]) if n.lower().endswith((".ppma", ".ppmp")))
             listing = c.cmd("ls /APPS")
@@ -306,7 +326,7 @@ def main(argv):
                     c.reboot_and_wait()
             print(f"  synced {len(done)} apps with {reboots} reboot(s)")
         elif op == "appstart":
-            print(c.cmd(f"appstart {argv[2]}", timeout=10.0))
+            print(c.appstart(argv[2]))
         elif op == "screenshot":
             c.screenshot(argv[2])
         elif op == "button":

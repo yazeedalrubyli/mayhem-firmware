@@ -90,6 +90,10 @@ is why the un-calibrated defaults are now 2.5/1.5 dB (about 3× idle, the same r
   never writes it; not reproducible from the console, most likely a physical touch. Toggling it back changed
   neither P nor the floor.
 
+- Where the app lives on the device: main menu → **Receive** → **NEXT >** → **Presence** (second page, first
+  column, second row, between Scanner and ACARS; `62_receive_menu_page2_presence.png`). Firmware in flash
+  now reports version ee3c8107 with all 85 apps resynced from that build.
+
 ## 5. Toolchain and the deploy loop
 
 - Build: `docker run -v "$PWD:/havoc" -u "$(id -u):$(id -g)" --rm portapack-dev ninja -j16` in `build/`
@@ -102,8 +106,12 @@ is why the un-calibrated defaults are now 2.5/1.5 dB (about 3× idle, the same r
   device's USB stack and needed a hardware reset. `verify` uses CRC-32/BZIP2, which is what the console's
   `crc32` computes. Every console reply without a prompt is an error (never silent success).
 - A firmware change needs: upload `.bin`, `flash`, wait for the first boot (200–300 s on this device), then
-  `sync-apps` (the menu hides apps whose version hash differs from the firmware's; `appstart` still runs
-  them). An app-only change needs only the new `presence.ppma` uploaded.
+  `sync-apps` (the menu and `applist` hide apps whose version hash differs from the firmware's; `appstart`
+  still runs them). An app-only change needs only the new `presence.ppma` uploaded, **but only while no
+  commit has been made since the firmware in flash was configured**: ninja re-runs the cmake configure when
+  `HEAD` moves, which changes `VERSION_MD5` for every app, and the rebuilt app is then invisible in the
+  menu (this bit me on 2026-09-25: after committing, the fixed app ran via `appstart` but did not appear
+  under Receive until the firmware was reflashed and all apps resynced from the same build).
 - Console facts learned the hard way: `button` numbers are 1 Right 2 Left 3 Down 4 Up 5 Select 6 Dfu
   (opens the debug overlay; press again to cycle it off) 7 encoder −1 8 encoder +1; `touch x y` is in
   screen pixels, view row r is at y = 16(r+1); `setfreq` parses with `atol`, so anything ≥ 2 147 483 648 Hz
